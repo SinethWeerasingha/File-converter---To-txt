@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Content Viewer</title>
-    <link rel="stylesheet" href="./css/style.css">
     <script>
         (function () {
             try {
@@ -17,6 +16,368 @@
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+    <style>
+        /* ============================================
+           File Content Viewer — Stylesheet
+           ============================================ */
+        :root,
+        :root[data-theme="light"] {
+            color-scheme: light;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #e0e7ff;
+            --success: #10b981;
+            --success-hover: #059669;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --warning: #f59e0b;
+            --bg: #f8fafc;
+            --bg-alt: #f1f5f9;
+            --surface: #ffffff;
+            --surface-2: #f8fafc;
+            --text: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --border: #e2e8f0;
+            --border-strong: #cbd5e1;
+            --code-bg: #0f172a;
+            --code-text: #e2e8f0;
+            --overlay: rgba(15, 23, 42, 0.45);
+            --radius: 16px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        :root[data-theme="dark"] {
+            color-scheme: dark;
+            --primary: #818cf8;
+            --primary-hover: #a5b4fc;
+            --primary-light: #312e81;
+            --success: #34d399;
+            --success-hover: #6ee7b7;
+            --danger: #f87171;
+            --danger-hover: #fca5a5;
+            --warning: #fbbf24;
+            --bg: #0b1120;
+            --bg-alt: #111827;
+            --surface: #1e293b;
+            --surface-2: #0f172a;
+            --text: #e2e8f0;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --border-strong: #475569;
+            --code-bg: #020617;
+            --code-text: #e2e8f0;
+            --overlay: rgba(0, 0, 0, 0.6);
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+            --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+        }
+        html, body, .card, .text-input, .btn, .mode-tab,
+        .toast, .output-container, .output-header, .progress-bar {
+            transition: background-color 0.25s ease,
+                        color 0.25s ease,
+                        border-color 0.25s ease,
+                        box-shadow 0.25s ease;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .app-container { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
+        .app-header { text-align: center; margin-bottom: 2.5rem; }
+        .app-header-top {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.5rem;
+            position: relative;
+        }
+        .app-header h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+        }
+        .subtitle { color: var(--text-secondary); font-size: 1.125rem; }
+        .card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        .theme-toggle {
+            position: relative;
+            width: 56px;
+            height: 32px;
+            border-radius: 9999px;
+            border: 1px solid var(--border);
+            background: var(--bg-alt);
+            cursor: pointer;
+            padding: 0;
+            flex-shrink: 0;
+            transition: var(--transition);
+            overflow: hidden;
+        }
+        .theme-toggle:hover {
+            border-color: var(--primary);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+        .theme-toggle:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+        .theme-icon {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.95rem;
+            line-height: 1;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            pointer-events: none;
+        }
+        .theme-icon-light { left: 7px; }
+        .theme-icon-dark  { right: 7px; }
+        :root[data-theme="light"] .theme-icon-light { opacity: 1; transform: translateY(-50%) scale(1); }
+        :root[data-theme="light"] .theme-icon-dark  { opacity: 0; transform: translateY(-50%) scale(0.5); }
+        :root[data-theme="dark"]  .theme-icon-light { opacity: 0; transform: translateY(-50%) scale(0.5); }
+        :root[data-theme="dark"]  .theme-icon-dark  { opacity: 1; transform: translateY(-50%) scale(1); }
+        .theme-toggle::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 2px 6px rgb(0 0 0 / 0.25);
+            transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        :root[data-theme="dark"] .theme-toggle::after {
+            transform: translateX(24px);
+        }
+        .upload-section { padding: 2rem; margin-bottom: 1.5rem; }
+        .mode-tabs {
+            display: inline-flex;
+            background: var(--bg-alt);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 4px;
+            margin-bottom: 1.5rem;
+            gap: 4px;
+        }
+        .mode-tab {
+            background: transparent;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+        .mode-tab:hover { color: var(--text); }
+        .mode-tab.is-active {
+            background: var(--surface);
+            color: var(--primary);
+            box-shadow: var(--shadow);
+        }
+        .mode-panel { animation: fadeIn 0.2s ease; }
+        .mode-panel[hidden] { display: none; }
+        .input-label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.9375rem;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+        .input-row {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .input-row-top { margin-top: 0.75rem; }
+        .actions-row   { margin-top: 1.5rem; }
+        .input-hint {
+            margin-top: 0.75rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        .input-hint code {
+            background: var(--bg-alt);
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+        }
+        .input-hint-inline {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1.25rem;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 0.9375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: inherit;
+            white-space: nowrap;
+        }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-primary   { background: var(--primary); color: white; }
+        :root[data-theme="dark"] .btn-primary { color: #0b1120; }
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+        .btn-success   { background: var(--success); color: white; }
+        :root[data-theme="dark"] .btn-success { color: #0b1120; }
+        .btn-success:hover:not(:disabled) {
+            background: var(--success-hover);
+            transform: translateY(-1px);
+        }
+        .btn-secondary { background: var(--text-secondary); color: white; }
+        :root[data-theme="dark"] .btn-secondary { color: #0b1120; }
+        .btn-secondary:hover:not(:disabled) { background: var(--text-muted); }
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+        .btn-ghost:hover:not(:disabled) {
+            background: var(--bg-alt);
+            color: var(--text);
+            border-color: var(--border-strong);
+        }
+        .btn-icon { font-size: 1rem; }
+        .progress-wrapper { margin-bottom: 1.5rem; animation: fadeIn 0.3s ease; }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--border);
+            border-radius: 9999px;
+            overflow: hidden;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 9999px;
+        }
+        .progress-fill.indeterminate {
+            width: 40%;
+            animation: indeterminate 1.2s infinite ease-in-out;
+        }
+        @keyframes indeterminate {
+            0%   { transform: translateX(-150%); }
+            100% { transform: translateX(250%); }
+        }
+        .progress-text {
+            text-align: center;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            word-break: break-all;
+        }
+        .output-section { animation: fadeIn 0.4s ease; }
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 1rem;
+            background: var(--surface);
+        }
+        .output-title { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
+        .output-title h2 { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+        .meta { font-size: 0.875rem; color: var(--text-muted); font-weight: 500; }
+        .output-actions { display: flex; gap: 0.5rem; }
+        .output-container { background: var(--code-bg); overflow: auto; max-height: 70vh; }
+        .output-content {
+            font-family: 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
+            font-size: 0.875rem;
+            line-height: 1.7;
+            color: var(--code-text);
+            padding: 1.5rem;
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            tab-size: 4;
+        }
+        .toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            z-index: 1000;
+            max-width: 400px;
+        }
+        .toast {
+            padding: 1rem 1.25rem;
+            border-radius: var(--radius-sm);
+            background: var(--surface);
+            color: var(--text);
+            box-shadow: var(--shadow-lg);
+            border-left: 4px solid var(--primary);
+            font-size: 0.9375rem;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            pointer-events: auto;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast-success { border-left-color: var(--success); }
+        .toast-error   { border-left-color: var(--danger); }
+        .toast-warning { border-left-color: var(--warning); }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 768px) {
+            .app-container { padding: 1rem; }
+            .app-header h1 { font-size: 1.75rem; }
+            .input-row { flex-direction: column; }
+            .input-row .btn { width: 100%; justify-content: center; }
+            .output-header { flex-direction: column; align-items: flex-start; }
+            .btn { flex: 1; justify-content: center; }
+            .mode-tabs { width: 100%; }
+            .mode-tab { flex: 1; }
+            .theme-toggle { width: 48px; height: 28px; }
+            .theme-toggle::after { width: 20px; height: 20px; }
+            :root[data-theme="dark"] .theme-toggle::after { transform: translateX(20px); }
+        }
+    </style>
 </head>
 <body>
     <div class="app-container">
@@ -119,6 +480,454 @@
         <div class="toast-container" id="toastContainer" role="region" aria-live="polite"></div>
     </div>
 
-    <script src="./js/app.js"></script>
+    <script>
+    /* ============================================================
+       Theme manager
+    ============================================================ */
+    const ThemeManager = {
+        STORAGE_KEY: 'theme',
+        init() {
+            this.toggleBtn = document.getElementById('themeToggle');
+            if (!this.toggleBtn) return;
+            this.toggleBtn.addEventListener('click', () => this.toggle());
+            if (window.matchMedia) {
+                const mq = window.matchMedia('(prefers-color-scheme: dark)');
+                const handler = (e) => {
+                    if (localStorage.getItem(this.STORAGE_KEY)) return;
+                    this.apply(e.matches ? 'dark' : 'light');
+                };
+                if (mq.addEventListener) mq.addEventListener('change', handler);
+                else if (mq.addListener) mq.addListener(handler);
+            }
+        },
+        current() {
+            return document.documentElement.getAttribute('data-theme') || 'light';
+        },
+        apply(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            if (this.toggleBtn) {
+                const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+                this.toggleBtn.setAttribute('aria-label', label);
+                this.toggleBtn.setAttribute('title', label);
+            }
+        },
+        toggle() {
+            const next = this.current() === 'dark' ? 'light' : 'dark';
+            this.apply(next);
+            try { localStorage.setItem(this.STORAGE_KEY, next); } catch (e) {}
+        },
+    };
+
+    /* ============================================================
+       Config
+    ============================================================ */
+    const SKIP_DIRS = new Set([
+        '.git', '.svn', '.hg',
+        'node_modules', '__pycache__', '.pytest_cache', '.mypy_cache',
+        'venv', '.venv', 'env', '.env',
+        'dist', 'build', '.next', '.nuxt', '.cache', '.idea', '.vscode',
+        'target', 'bin', 'obj',
+    ]);
+
+    const BINARY_EXTENSIONS = new Set([
+        'png','jpg','jpeg','gif','bmp','ico','webp','tiff','tif','svgz',
+        'mp3','mp4','avi','mov','mkv','webm','wav','flac','ogg','m4a',
+        'zip','rar','7z','tar','gz','bz2','xz','zst',
+        'exe','dll','so','dylib','bin','iso','dmg','msi','app',
+        'ttf','otf','woff','woff2','eot',
+        'pyc','pyo','pyd','class','o','a','lib','obj',
+        'db','sqlite','sqlite3','mdb',
+        'psd','ai','eps','sketch','fig',
+    ]);
+
+    const MAX_FILE_SIZE  = 20  * 1024 * 1024;
+    const MAX_TOTAL_SIZE = 200 * 1024 * 1024;
+    const MAX_FILES      = 5000;
+
+    if (window.pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    /* ============================================================
+       Main app
+    ============================================================ */
+    class FileContentViewer {
+        constructor() {
+            this.modeTabs      = Array.from(document.querySelectorAll('.mode-tab'));
+            this.modePanels    = Array.from(document.querySelectorAll('.mode-panel'));
+            this.folderPicker  = document.getElementById('folderPicker');
+            this.filePicker    = document.getElementById('filePicker');
+            this.pickFolderBtn = document.getElementById('pickFolderBtn');
+            this.pickFilesBtn  = document.getElementById('pickFilesBtn');
+            this.folderInfo    = document.getElementById('folderInfo');
+            this.filesCount    = document.getElementById('filesCount');
+            this.convertBtn    = document.getElementById('convertBtn');
+            this.clearBtn      = document.getElementById('clearBtn');
+            this.progressWrap  = document.getElementById('progressWrapper');
+            this.progressText  = document.getElementById('progressText');
+            this.outputSection = document.getElementById('outputSection');
+            this.outputContent = document.getElementById('outputContent');
+            this.outputMeta    = document.getElementById('outputMeta');
+            this.exportBtn     = document.getElementById('exportBtn');
+            this.copyBtn       = document.getElementById('copyBtn');
+            this.toastContainer= document.getElementById('toastContainer');
+
+            this.mode = 'folder';
+            this.selectedFiles = [];
+            this.selectedLabel = '';
+            this.currentOutput = '';
+            this.lastSourceType = 'folder';
+
+            this.init();
+        }
+
+        init() {
+            this.modeTabs.forEach(tab => {
+                tab.addEventListener('click', () => this.setMode(tab.dataset.mode));
+            });
+            this.pickFolderBtn.addEventListener('click', () => this.folderPicker.click());
+            this.pickFilesBtn.addEventListener('click',  () => this.filePicker.click());
+            this.folderPicker.addEventListener('change', (e) => this.onFilesChosen(e.target.files, 'folder'));
+            this.filePicker.addEventListener('change',   (e) => this.onFilesChosen(e.target.files, 'files'));
+            this.convertBtn.addEventListener('click', () => this.convert());
+            this.clearBtn.addEventListener('click',   () => this.clearAll());
+            this.exportBtn.addEventListener('click',  () => this.exportTxt());
+            this.copyBtn.addEventListener('click',    () => this.copyToClipboard());
+
+            document.body.addEventListener('dragover', (e) => e.preventDefault());
+            document.body.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files.length) {
+                    this.onFilesChosen(e.dataTransfer.files, 'files');
+                }
+            });
+        }
+
+        setMode(mode) {
+            if (mode !== 'folder' && mode !== 'files') return;
+            this.mode = mode;
+            this.modeTabs.forEach(tab => {
+                const active = tab.dataset.mode === mode;
+                tab.classList.toggle('is-active', active);
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            this.modePanels.forEach(panel => {
+                panel.hidden = panel.dataset.panel !== mode;
+            });
+        }
+
+        onFilesChosen(fileList, sourceKind) {
+            const files = Array.from(fileList);
+            if (!files.length) return;
+
+            this.selectedFiles = files;
+            this.lastSourceType = sourceKind;
+
+            if (sourceKind === 'folder') {
+                const root = files[0].webkitRelativePath.split('/')[0] || '(folder)';
+                this.selectedLabel = root;
+                this.folderInfo.textContent = `${root} — ${files.length} file(s)`;
+            } else {
+                this.selectedLabel = `${files.length} file(s)`;
+                this.filesCount.textContent = this.selectedLabel;
+            }
+
+            this.convertBtn.disabled = false;
+            this.showToast(`Selected ${files.length} file(s)`, 'success');
+        }
+
+        async convert() {
+            if (!this.selectedFiles.length) {
+                this.showToast('Select a folder or files first.', 'error');
+                return;
+            }
+
+            this.progressWrap.style.display = 'block';
+            this.progressText.textContent = `Reading ${this.selectedFiles.length} file(s)…`;
+            this.outputSection.style.display = 'none';
+            this.convertBtn.disabled = true;
+
+            await new Promise(r => setTimeout(r, 50));
+
+            let out;
+            try {
+                out = await this.processFiles(this.selectedFiles);
+            } catch (err) {
+                this.progressWrap.style.display = 'none';
+                this.convertBtn.disabled = false;
+                this.showToast('Processing error: ' + err.message, 'error');
+                return;
+            }
+
+            this.progressWrap.style.display = 'none';
+            this.convertBtn.disabled = false;
+
+            if (out.abortReason) this.showToast(out.abortReason, 'warning');
+            if (!out.results.length) {
+                this.showToast('No readable files found.', 'error');
+                return;
+            }
+            this.renderOutput(out);
+        }
+
+        async processFiles(files) {
+            const results = [];
+            let totalSize = 0;
+            let abortReason = null;
+
+            const sorted = [...files].sort((a, b) => {
+                const ap = (a.webkitRelativePath || a.name).toLowerCase();
+                const bp = (b.webkitRelativePath || b.name).toLowerCase();
+                return ap.localeCompare(bp);
+            });
+
+            for (const file of sorted) {
+                const rel = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
+                const parts = rel.split('/');
+                const dirs = parts.slice(0, -1);
+
+                if (dirs.some(d => SKIP_DIRS.has(d.toLowerCase()) || d.startsWith('.'))) {
+                    continue;
+                }
+
+                if (results.length >= MAX_FILES) {
+                    abortReason = `Stopped: more than ${MAX_FILES} files.`;
+                    break;
+                }
+
+                const base = { filename: parts[parts.length - 1], path: rel, size: file.size };
+
+                if (file.size > MAX_FILE_SIZE) {
+                    results.push({ ...base, success: false,
+                        error: `File too large (${file.size} bytes) — skipped.`, content: null });
+                    continue;
+                }
+                if (file.size > MAX_TOTAL_SIZE - totalSize) {
+                    results.push({ ...base, success: false,
+                        error: 'Skipped: total size budget exceeded.', content: null });
+                    continue;
+                }
+
+                const ext = rel.includes('.') ? rel.split('.').pop().toLowerCase() : '';
+
+                if (BINARY_EXTENSIONS.has(ext)) {
+                    results.push({ ...base, success: false,
+                        error: `Binary file (.${ext}) — skipped.`, content: null });
+                    continue;
+                }
+
+                if (await this.looksBinary(file)) {
+                    results.push({ ...base, success: false,
+                        error: 'Binary file — skipped.', content: null });
+                    continue;
+                }
+
+                let content = null, error = null;
+                try {
+                    if (ext === 'pdf')        ({ content, error } = await this.extractPdf(file));
+                    else if (ext === 'docx')  ({ content, error } = await this.extractDocx(file));
+                    else                       content = await this.extractText(file);
+                } catch (e) {
+                    error = 'Extract error: ' + e.message;
+                }
+
+                if (error) {
+                    results.push({ ...base, success: false, error, content: null });
+                } else if (!content || !content.trim()) {
+                    results.push({ ...base, success: true, error: null, content: '' });
+                } else {
+                    results.push({ ...base, success: true, error: null, content });
+                }
+
+                totalSize += file.size;
+                if (totalSize >= MAX_TOTAL_SIZE) {
+                    abortReason = `Stopped: total content exceeded ${Math.floor(MAX_TOTAL_SIZE / 1048576)} MB.`;
+                    break;
+                }
+
+                if (results.length % 20 === 0) {
+                    this.progressText.textContent = `Read ${results.length} file(s)…`;
+                    await new Promise(r => setTimeout(r, 0));
+                }
+            }
+
+            return { results, totalSize, abortReason };
+        }
+
+        async looksBinary(file) {
+            if (!file.size) return false;
+            const slice = await file.slice(0, 4096).arrayBuffer();
+            const bytes = new Uint8Array(slice);
+            for (const b of bytes) if (b === 0) return true;
+            let nonPrint = 0;
+            for (const b of bytes) {
+                if (b < 32 && b !== 9 && b !== 10 && b !== 13) nonPrint++;
+            }
+            return (nonPrint / bytes.length) > 0.30;
+        }
+
+        async extractText(file) {
+            const buf = await file.arrayBuffer();
+            try {
+                return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+            } catch {
+                return new TextDecoder('windows-1252').decode(buf);
+            }
+        }
+
+        async extractPdf(file) {
+            if (typeof pdfjsLib === 'undefined') {
+                return { error: 'PDF library failed to load (check your connection).' };
+            }
+            try {
+                const buf = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+                const pages = [];
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const tc = await page.getTextContent();
+                    pages.push(tc.items.map(it => it.str).join(' '));
+                }
+                const full = pages.join('\n\n');
+                return full.trim()
+                    ? { content: full }
+                    : { content: '[PDF contains no extractable text]' };
+            } catch (e) {
+                return { error: 'PDF error: ' + e.message };
+            }
+        }
+
+        async extractDocx(file) {
+            if (typeof mammoth === 'undefined') {
+                return { error: 'DOCX library failed to load (check your connection).' };
+            }
+            try {
+                const buf = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer: buf });
+                return result.value.trim()
+                    ? { content: result.value }
+                    : { content: '[Document is empty]' };
+            } catch (e) {
+                return { error: 'Word document error: ' + e.message };
+            }
+        }
+
+        renderOutput(out) {
+            const filesData = out.results;
+            let output = '';
+            let ok = 0, failed = 0;
+
+            if (this.lastSourceType === 'folder') {
+                output += `FOLDER: ${this.selectedLabel}\n`;
+            } else {
+                output += `SOURCE: individual files\n`;
+            }
+            output += `FILES: ${filesData.length}\n`;
+            output += `GENERATED: ${new Date().toISOString()}\n`;
+            output += '='.repeat(60) + '\n\n';
+
+            filesData.forEach((file, i) => {
+                output += '=========================\n';
+                output += `FILE ${i + 1}: ${file.path}\n`;
+                output += '=========================\n';
+                if (file.success) {
+                    output += file.content || '';
+                    if (file.content && !file.content.endsWith('\n')) output += '\n';
+                    ok++;
+                } else {
+                    output += `[SKIPPED: ${file.error}]\n`;
+                    failed++;
+                }
+                output += '\n';
+            });
+
+            this.currentOutput = output;
+            this.outputContent.textContent = output;
+            this.outputSection.style.display = 'block';
+
+            const parts = [`${ok} extracted`];
+            if (failed) parts.push(`${failed} skipped`);
+            this.outputMeta.textContent = parts.join(' • ');
+
+            setTimeout(() => {
+                this.outputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+
+        exportTxt() {
+            if (!this.currentOutput) {
+                this.showToast('Nothing to export', 'warning');
+                return;
+            }
+            const prefix = this.lastSourceType === 'files' ? 'files' : 'folder';
+            const blob = new Blob([this.currentOutput], { type: 'text/plain;charset=utf-8' });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = `${prefix}_contents_${this.timestamp()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.showToast('Exported .txt file', 'success');
+        }
+
+        async copyToClipboard() {
+            if (!this.currentOutput) {
+                this.showToast('Nothing to copy', 'warning');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(this.currentOutput);
+                this.showToast('Copied to clipboard!', 'success');
+            } catch {
+                const ta = document.createElement('textarea');
+                ta.value = this.currentOutput;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); this.showToast('Copied!', 'success'); }
+                catch { this.showToast('Copy failed.', 'error'); }
+                document.body.removeChild(ta);
+            }
+        }
+
+        clearAll() {
+            this.selectedFiles = [];
+            this.selectedLabel = '';
+            this.folderPicker.value = '';
+            this.filePicker.value = '';
+            this.folderInfo.textContent = 'No folder selected';
+            this.filesCount.textContent = '0 file(s)';
+            this.outputContent.textContent = '';
+            this.outputSection.style.display = 'none';
+            this.currentOutput = '';
+            this.convertBtn.disabled = true;
+        }
+
+        timestamp() {
+            return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+        }
+
+        showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            this.toastContainer.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('show'));
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        ThemeManager.init();
+        new FileContentViewer();
+    });
+    </script>
 </body>
 </html>
