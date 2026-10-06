@@ -5,7 +5,7 @@ plain-text `.txt`**. Runs entirely in your browser — no install, no
 server, nothing uploaded.
 
 ## 🚀 Try it now
-**→ https://YOUR_USERNAME.github.io/file-content-viewer/**
+**→ [https://YOUR_USERNAME.github.io/file-content-viewer/](https://sinethweerasingha.github.io/File-converter---To-txt/)**
 
 ## ✨ Features
 - 📁 Folder mode (recursive)
