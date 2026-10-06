@@ -1,0 +1,15 @@
+# Python leftovers (harmless but unneeded now)
+__pycache__/
+venv/
+.venv/
+*.pyc
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# App output
+folder_contents_*.txt
+files_contents_*.txt

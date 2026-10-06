@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Content Viewer</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('theme');
+                var system = window.matchMedia &&
+                             window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.documentElement.setAttribute('data-theme', saved || (system ? 'dark' : 'light'));
+            } catch (e) {}
+        })();
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="app-header-top">
+                <h1>📁 File Converter (To txt)</h1>
+                <button type="button" class="theme-toggle" id="themeToggle"
+                        aria-label="Toggle dark mode" title="Toggle dark mode">
+                    <span class="theme-icon theme-icon-light" aria-hidden="true">☀️</span>
+                    <span class="theme-icon theme-icon-dark"  aria-hidden="true">🌙</span>
+                </button>
+            </div>
+            <p class="subtitle">Pick a folder or individual files — everything becomes one .txt output</p>
+        </header>
+
+        <main class="app-main">
+            <section class="card upload-section">
+                <div class="mode-tabs" role="tablist" aria-label="Input mode">
+                    <button type="button" class="mode-tab is-active"
+                            data-mode="folder" role="tab" aria-selected="true">
+                        📁 Folder
+                    </button>
+                    <button type="button" class="mode-tab"
+                            data-mode="files" role="tab" aria-selected="false">
+                        📄 Individual Files
+                    </button>
+                </div>
+
+                <input type="file" id="folderPicker" webkitdirectory directory multiple hidden>
+                <input type="file" id="filePicker" multiple hidden>
+
+                <div class="mode-panel" data-panel="folder">
+                    <label class="input-label">Select a folder</label>
+                    <div class="input-row">
+                        <button type="button" class="btn btn-primary" id="pickFolderBtn">
+                            <span class="btn-icon">📂</span> Select Folder
+                        </button>
+                        <span class="input-hint-inline" id="folderInfo">No folder selected</span>
+                    </div>
+                    <p class="input-hint">
+                        Subfolders are included. Binary files and junk folders
+                        (<code>.git</code>, <code>node_modules</code>,
+                        <code>venv</code>, <code>__pycache__</code>, …)
+                        are skipped automatically.
+                    </p>
+                </div>
+
+                <div class="mode-panel" data-panel="files" hidden>
+                    <label class="input-label">Select files</label>
+                    <div class="input-row">
+                        <button type="button" class="btn btn-primary" id="pickFilesBtn">
+                            <span class="btn-icon">📄</span> Select Files
+                        </button>
+                        <span class="input-hint-inline" id="filesCount">0 file(s)</span>
+                    </div>
+                    <p class="input-hint">
+                        Pick multiple files with the button, or drag them onto
+                        this page. Everything is read locally — nothing is uploaded.
+                    </p>
+                </div>
+
+                <div class="input-row actions-row">
+                    <button type="button" class="btn btn-success" id="convertBtn" disabled>
+                        <span class="btn-icon">🔍</span> Convert
+                    </button>
+                    <button type="button" class="btn btn-ghost" id="clearBtn">
+                        <span class="btn-icon">🗑️</span> Clear
+                    </button>
+                </div>
+            </section>
+
+            <div class="progress-wrapper" id="progressWrapper" style="display: none;">
+                <div class="progress-bar" role="progressbar">
+                    <div class="progress-fill indeterminate" id="progressFill"></div>
+                </div>
+                <p class="progress-text" id="progressText">Reading…</p>
+            </div>
+
+            <section class="output-section card" id="outputSection" style="display: none;">
+                <div class="output-header">
+                    <div class="output-title">
+                        <h2>📄 Extracted Content</h2>
+                        <span class="meta" id="outputMeta"></span>
+                    </div>
+                    <div class="output-actions">
+                        <button type="button" class="btn btn-secondary" id="exportBtn">
+                            <span class="btn-icon">💾</span> Export .txt
+                        </button>
+                        <button type="button" class="btn btn-ghost" id="copyBtn">
+                            <span class="btn-icon">📋</span> Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="output-container">
+                    <pre class="output-content" id="outputContent"></pre>
+                </div>
+            </section>
+        </main>
+
+        <div class="toast-container" id="toastContainer" role="region" aria-live="polite"></div>
+    </div>
+
+    <script src="./js/app.js"></script>
+</body>
+</html>
