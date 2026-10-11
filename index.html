@@ -14,8 +14,16 @@
             } catch (e) {}
         })();
     </script>
+    <!-- PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Word (.docx) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <!-- Excel / spreadsheets (.xlsx .xls .xlsb .ods .numbers ...) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- ZIP-based formats (.pptx .odt .odp .epub .zip) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- OCR for images and scanned PDFs (optional, loaded but only used if enabled) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.5/tesseract.min.js"></script>
 
     <style>
         /* ============================================
@@ -108,6 +116,11 @@
             letter-spacing: -0.025em;
         }
         .subtitle { color: var(--text-secondary); font-size: 1.125rem; }
+        .formats-line {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
         .card {
             background: var(--surface);
             border-radius: var(--radius);
@@ -231,6 +244,51 @@
             color: var(--text-muted);
             font-weight: 500;
         }
+
+        /* Options row (OCR) */
+        .options-row {
+            display: flex;
+            gap: 0.75rem 1.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 1.5rem;
+            padding-top: 1.25rem;
+            border-top: 1px dashed var(--border);
+        }
+        .check {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9375rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .check input { width: 1rem; height: 1rem; accent-color: var(--primary); cursor: pointer; }
+        .option-field {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .text-input {
+            width: 9rem;
+            padding: 0.4rem 0.6rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.875rem;
+        }
+        .text-input:focus-visible {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
         .btn {
             display: inline-flex;
             align-items: center;
@@ -391,6 +449,10 @@
                 </button>
             </div>
             <p class="subtitle">Pick a folder or individual files — everything becomes one .txt output</p>
+            <p class="formats-line">
+                PDF · Word · Excel · PowerPoint · OpenDocument · EPUB · RTF · ZIP ·
+                images (OCR) · and any text or code file
+            </p>
         </header>
 
         <main class="app-main">
@@ -418,7 +480,7 @@
                         <span class="input-hint-inline" id="folderInfo">No folder selected</span>
                     </div>
                     <p class="input-hint">
-                        Subfolders are included. Binary files and junk folders
+                        Subfolders are included. Unsupported binary files and junk folders
                         (<code>.git</code>, <code>node_modules</code>,
                         <code>venv</code>, <code>__pycache__</code>, …)
                         are skipped automatically.
@@ -437,6 +499,20 @@
                         Pick multiple files with the button, or drag them onto
                         this page. Everything is read locally — nothing is uploaded.
                     </p>
+                </div>
+
+                <div class="options-row">
+                    <label class="check" title="Read text from images and scanned PDFs. Slower; downloads OCR data on first use.">
+                        <input type="checkbox" id="ocrCheck">
+                        🖼️ OCR images &amp; scanned PDFs
+                    </label>
+                    <label class="option-field">
+                        Language
+                        <input type="text" class="text-input" id="ocrLang" value="eng"
+                               placeholder="eng" spellcheck="false"
+                               title="Tesseract language codes, e.g. eng, sin, tam, or eng+sin">
+                    </label>
+                    <span class="input-hint-inline">Codes like <code>eng</code>, <code>sin</code>, <code>tam</code>, <code>eng+sin</code></span>
                 </div>
 
                 <div class="input-row actions-row">
@@ -526,23 +602,47 @@
         'node_modules', '__pycache__', '.pytest_cache', '.mypy_cache',
         'venv', '.venv', 'env', '.env',
         'dist', 'build', '.next', '.nuxt', '.cache', '.idea', '.vscode',
-        'target', 'bin', 'obj',
+        'target', 'bin', 'obj', '__macosx',
     ]);
 
+    // Binary formats we can't read (PDF/Office/ZIP/images are handled separately)
     const BINARY_EXTENSIONS = new Set([
-        'png','jpg','jpeg','gif','bmp','ico','webp','tiff','tif','svgz',
+        'ico','svgz','psd','ai','eps','sketch','fig',
         'mp3','mp4','avi','mov','mkv','webm','wav','flac','ogg','m4a',
-        'zip','rar','7z','tar','gz','bz2','xz','zst',
+        'rar','7z','tar','gz','bz2','xz','zst','jar','war','apk',
         'exe','dll','so','dylib','bin','iso','dmg','msi','app',
         'ttf','otf','woff','woff2','eot',
         'pyc','pyo','pyd','class','o','a','lib','obj',
         'db','sqlite','sqlite3','mdb',
-        'psd','ai','eps','sketch','fig',
     ]);
+
+    const IMAGE_EXTENSIONS = new Set(['png','jpg','jpeg','gif','bmp','webp','tif','tiff']);
+
+    // extension -> extractor method name
+    const HANDLERS = {
+        pdf:  'extractPdf',
+        // Word
+        docx: 'extractDocx', docm: 'extractDocx', dotx: 'extractDocx', dotm: 'extractDocx',
+        // Spreadsheets (SheetJS)
+        xlsx: 'extractSpreadsheet', xlsm: 'extractSpreadsheet', xlsb: 'extractSpreadsheet',
+        xls:  'extractSpreadsheet', xltx: 'extractSpreadsheet', xltm: 'extractSpreadsheet',
+        ods:  'extractSpreadsheet', fods: 'extractSpreadsheet', numbers: 'extractSpreadsheet',
+        // PowerPoint
+        pptx: 'extractPptx', pptm: 'extractPptx', ppsx: 'extractPptx', potx: 'extractPptx',
+        // OpenDocument text/presentations
+        odt: 'extractOdf', ott: 'extractOdf', odp: 'extractOdf', otp: 'extractOdf',
+        // Others
+        epub: 'extractEpub',
+        rtf:  'extractRtf',
+        // Legacy binary Office (best-effort)
+        doc: 'extractLegacy', ppt: 'extractLegacy', pps: 'extractLegacy',
+        pub: 'extractLegacy', msg: 'extractLegacy',
+    };
 
     const MAX_FILE_SIZE  = 20  * 1024 * 1024;
     const MAX_TOTAL_SIZE = 200 * 1024 * 1024;
     const MAX_FILES      = 5000;
+    const MAX_ZIP_DEPTH  = 3;
 
     if (window.pdfjsLib) {
         pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -564,6 +664,8 @@
             this.filesCount    = document.getElementById('filesCount');
             this.convertBtn    = document.getElementById('convertBtn');
             this.clearBtn      = document.getElementById('clearBtn');
+            this.ocrCheck      = document.getElementById('ocrCheck');
+            this.ocrLangInput  = document.getElementById('ocrLang');
             this.progressWrap  = document.getElementById('progressWrapper');
             this.progressText  = document.getElementById('progressText');
             this.outputSection = document.getElementById('outputSection');
@@ -578,6 +680,10 @@
             this.selectedLabel = '';
             this.currentOutput = '';
             this.lastSourceType = 'folder';
+
+            this.ocrEnabled = false;
+            this.ocrLang = 'eng';
+            this.ocrWorker = null;
 
             this.init();
         }
@@ -637,6 +743,16 @@
             this.showToast(`Selected ${files.length} file(s)`, 'success');
         }
 
+        setProgress(text) {
+            this.progressText.textContent = text;
+        }
+
+        tick() {
+            return new Promise(r => setTimeout(r, 0));
+        }
+
+        /* ---------------- Conversion flow ---------------- */
+
         async convert() {
             if (!this.selectedFiles.length) {
                 this.showToast('Select a folder or files first.', 'error');
@@ -644,7 +760,7 @@
             }
 
             this.progressWrap.style.display = 'block';
-            this.progressText.textContent = `Reading ${this.selectedFiles.length} file(s)…`;
+            this.setProgress(`Reading ${this.selectedFiles.length} file(s)…`);
             this.outputSection.style.display = 'none';
             this.convertBtn.disabled = true;
 
@@ -657,9 +773,11 @@
                 this.progressWrap.style.display = 'none';
                 this.convertBtn.disabled = false;
                 this.showToast('Processing error: ' + err.message, 'error');
+                await this.disposeOcr();
                 return;
             }
 
+            await this.disposeOcr();
             this.progressWrap.style.display = 'none';
             this.convertBtn.disabled = false;
 
@@ -671,10 +789,16 @@
             this.renderOutput(out);
         }
 
+        sanitizeLang(value) {
+            const v = (value || '').trim();
+            return /^[a-z_]{3,}(\+[a-z_]{3,})*$/i.test(v) ? v : 'eng';
+        }
+
         async processFiles(files) {
-            const results = [];
-            let totalSize = 0;
-            let abortReason = null;
+            const out = { results: [], totalSize: 0, abortReason: null, stop: false, counter: 0 };
+
+            this.ocrEnabled = this.ocrCheck.checked;
+            this.ocrLang = this.sanitizeLang(this.ocrLangInput.value);
 
             const sorted = [...files].sort((a, b) => {
                 const ap = (a.webkitRelativePath || a.name).toLowerCase();
@@ -683,77 +807,130 @@
             });
 
             for (const file of sorted) {
+                if (out.stop) break;
                 const rel = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
-                const parts = rel.split('/');
-                const dirs = parts.slice(0, -1);
-
-                if (dirs.some(d => SKIP_DIRS.has(d.toLowerCase()) || d.startsWith('.'))) {
-                    continue;
-                }
-
-                if (results.length >= MAX_FILES) {
-                    abortReason = `Stopped: more than ${MAX_FILES} files.`;
-                    break;
-                }
-
-                const base = { filename: parts[parts.length - 1], path: rel, size: file.size };
-
-                if (file.size > MAX_FILE_SIZE) {
-                    results.push({ ...base, success: false,
-                        error: `File too large (${file.size} bytes) — skipped.`, content: null });
-                    continue;
-                }
-                if (file.size > MAX_TOTAL_SIZE - totalSize) {
-                    results.push({ ...base, success: false,
-                        error: 'Skipped: total size budget exceeded.', content: null });
-                    continue;
-                }
-
-                const ext = rel.includes('.') ? rel.split('.').pop().toLowerCase() : '';
-
-                if (BINARY_EXTENSIONS.has(ext)) {
-                    results.push({ ...base, success: false,
-                        error: `Binary file (.${ext}) — skipped.`, content: null });
-                    continue;
-                }
-
-                if (await this.looksBinary(file)) {
-                    results.push({ ...base, success: false,
-                        error: 'Binary file — skipped.', content: null });
-                    continue;
-                }
-
-                let content = null, error = null;
-                try {
-                    if (ext === 'pdf')        ({ content, error } = await this.extractPdf(file));
-                    else if (ext === 'docx')  ({ content, error } = await this.extractDocx(file));
-                    else                       content = await this.extractText(file);
-                } catch (e) {
-                    error = 'Extract error: ' + e.message;
-                }
-
-                if (error) {
-                    results.push({ ...base, success: false, error, content: null });
-                } else if (!content || !content.trim()) {
-                    results.push({ ...base, success: true, error: null, content: '' });
-                } else {
-                    results.push({ ...base, success: true, error: null, content });
-                }
-
-                totalSize += file.size;
-                if (totalSize >= MAX_TOTAL_SIZE) {
-                    abortReason = `Stopped: total content exceeded ${Math.floor(MAX_TOTAL_SIZE / 1048576)} MB.`;
-                    break;
-                }
-
-                if (results.length % 20 === 0) {
-                    this.progressText.textContent = `Read ${results.length} file(s)…`;
-                    await new Promise(r => setTimeout(r, 0));
-                }
+                await this.handleItem(rel, file, 0, out);
             }
 
-            return { results, totalSize, abortReason };
+            return out;
         }
+
+        getExt(name) {
+            return name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+        }
+
+        /**
+         * Process a single file (or a file inside an archive).
+         * Pushes one or more entries into out.results.
+         */
+        async handleItem(path, blob, depth, out) {
+            if (out.stop) return;
+
+            const parts = path.split('/');
+            const name = parts[parts.length - 1];
+            const dirs = parts.slice(0, -1);
+
+            if (dirs.some(d => SKIP_DIRS.has(d.toLowerCase()) || d.startsWith('.'))) return;
+
+            if (out.results.length >= MAX_FILES) {
+                out.abortReason = `Stopped: more than ${MAX_FILES} files.`;
+                out.stop = true;
+                return;
+            }
+
+            const base = { filename: name, path, size: blob.size };
+            const fail = (error) => out.results.push({ ...base, success: false, error, content: null });
+
+            if (blob.size > MAX_FILE_SIZE) {
+                return fail(`File too large (${blob.size} bytes) — skipped.`);
+            }
+            if (blob.size > MAX_TOTAL_SIZE - out.totalSize) {
+                return fail('Skipped: total size budget exceeded.');
+            }
+
+            out.counter++;
+            if (out.counter % 10 === 0) await this.tick();
+            this.setProgress(`Reading ${out.results.length + 1}: ${path}`);
+
+            const ext = this.getExt(name);
+
+            // --- ZIP archives: expand and process every entry ---
+            if (ext === 'zip') {
+                if (depth >= MAX_ZIP_DEPTH) return fail('Nested archive too deep — skipped.');
+                await this.expandZip(path, blob, depth, out, base, fail);
+                return;
+            }
+
+            let result = null;
+
+            try {
+                if (IMAGE_EXTENSIONS.has(ext)) {
+                    if (!this.ocrEnabled) {
+                        return fail(`Image (.${ext}) — enable "OCR images" to extract text.`);
+                    }
+                    result = await this.extractImage(blob);
+                } else if (BINARY_EXTENSIONS.has(ext)) {
+                    return fail(`Binary file (.${ext}) — skipped.`);
+                } else if (HANDLERS[ext]) {
+                    result = await this[HANDLERS[ext]](blob);
+                } else {
+                    // Unknown extension: treat as text unless it looks binary
+                    if (await this.looksBinary(blob)) return fail('Binary file — skipped.');
+                    result = { content: await this.extractText(blob) };
+                }
+            } catch (e) {
+                result = { error: 'Extract error: ' + e.message };
+            }
+
+            if (result.error) {
+                fail(result.error);
+            } else {
+                out.results.push({ ...base, success: true, error: null, content: result.content || '' });
+            }
+
+            out.totalSize += blob.size;
+            if (out.totalSize >= MAX_TOTAL_SIZE) {
+                out.abortReason = `Stopped: total content exceeded ${Math.floor(MAX_TOTAL_SIZE / 1048576)} MB.`;
+                out.stop = true;
+            }
+        }
+
+        async expandZip(path, blob, depth, out, base, fail) {
+            let zip;
+            try {
+                zip = await this.loadZip(blob);
+            } catch (e) {
+                return fail('ZIP error: ' + e.message);
+            }
+
+            const entries = Object.values(zip.files)
+                .filter(f => !f.dir)
+                .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+
+            if (!entries.length) {
+                out.results.push({ ...base, success: true, error: null, content: '[Archive is empty]' });
+                return;
+            }
+
+            for (const entry of entries) {
+                if (out.stop) break;
+                let inner;
+                try {
+                    inner = await entry.async('blob');
+                } catch (e) {
+                    out.results.push({
+                        filename: entry.name.split('/').pop(),
+                        path: `${path}/${entry.name}`,
+                        size: 0, success: false, content: null,
+                        error: 'Could not read archive entry: ' + e.message,
+                    });
+                    continue;
+                }
+                await this.handleItem(`${path}/${entry.name}`, inner, depth + 1, out);
+            }
+        }
+
+        /* ---------------- Detection & plain text ---------------- */
 
         async looksBinary(file) {
             if (!file.size) return false;
@@ -776,6 +953,27 @@
             }
         }
 
+        /* ---------------- ZIP helpers ---------------- */
+
+        async loadZip(blob) {
+            if (typeof JSZip === 'undefined') {
+                throw new Error('ZIP library failed to load (check your connection).');
+            }
+            return JSZip.loadAsync(blob);
+        }
+
+        /** Paragraph-by-paragraph text from an XML string. */
+        xmlParagraphs(xml, pTag, tTag) {
+            const doc = new DOMParser().parseFromString(xml, 'application/xml');
+            const paras = Array.from(doc.getElementsByTagName(pTag));
+            return paras
+                .map(p => Array.from(p.getElementsByTagName(tTag)).map(t => t.textContent).join(''))
+                .filter(line => line.length)
+                .join('\n');
+        }
+
+        /* ---------------- PDF ---------------- */
+
         async extractPdf(file) {
             if (typeof pdfjsLib === 'undefined') {
                 return { error: 'PDF library failed to load (check your connection).' };
@@ -787,31 +985,312 @@
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
                     const tc = await page.getTextContent();
-                    pages.push(tc.items.map(it => it.str).join(' '));
+                    pages.push(tc.items.map(it => it.str + (it.hasEOL ? '\n' : ' ')).join(''));
                 }
                 const full = pages.join('\n\n');
-                return full.trim()
-                    ? { content: full }
-                    : { content: '[PDF contains no extractable text]' };
+                if (full.trim()) return { content: full };
+
+                // Scanned PDF: fall back to OCR if enabled
+                if (this.ocrEnabled) return await this.ocrPdf(pdf);
+                return { content: '[PDF contains no extractable text — tick "OCR" to try scanned pages]' };
             } catch (e) {
                 return { error: 'PDF error: ' + e.message };
             }
         }
 
+        async ocrPdf(pdf) {
+            const worker = await this.getOcr();
+            if (!worker) return { error: 'OCR engine failed to load (check your connection).' };
+            const pages = [];
+            for (let i = 1; i <= pdf.numPages; i++) {
+                this.setProgress(`OCR page ${i}/${pdf.numPages}…`);
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 2 });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+                const { data } = await worker.recognize(canvas);
+                pages.push(`--- Page ${i} ---\n${(data.text || '').trim()}`);
+            }
+            return { content: pages.join('\n\n') };
+        }
+
+        /* ---------------- Word ---------------- */
+
         async extractDocx(file) {
-            if (typeof mammoth === 'undefined') {
-                return { error: 'DOCX library failed to load (check your connection).' };
+            const buf = await file.arrayBuffer();
+            if (typeof mammoth !== 'undefined') {
+                try {
+                    const result = await mammoth.extractRawText({ arrayBuffer: buf });
+                    if (result.value.trim()) return { content: result.value };
+                } catch (e) { /* fall through to raw XML fallback */ }
             }
             try {
-                const buf = await file.arrayBuffer();
-                const result = await mammoth.extractRawText({ arrayBuffer: buf });
-                return result.value.trim()
-                    ? { content: result.value }
-                    : { content: '[Document is empty]' };
+                const zip = await this.loadZip(file);
+                const f = zip.file('word/document.xml');
+                if (!f) return { error: 'Word document error: word/document.xml not found.' };
+                const text = this.xmlParagraphs(await f.async('string'), 'w:p', 'w:t');
+                return { content: text.trim() ? text : '[Document is empty]' };
             } catch (e) {
                 return { error: 'Word document error: ' + e.message };
             }
         }
+
+        /* ---------------- Excel & other spreadsheets ---------------- */
+
+        async extractSpreadsheet(file) {
+            if (typeof XLSX === 'undefined') {
+                return { error: 'Spreadsheet library failed to load (check your connection).' };
+            }
+            try {
+                const buf = await file.arrayBuffer();
+                const wb = XLSX.read(buf, { type: 'array' });
+                const parts = wb.SheetNames.map(name => {
+                    const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name]).trim();
+                    return `--- Sheet: ${name} ---\n${csv || '[empty sheet]'}`;
+                });
+                return { content: parts.length ? parts.join('\n\n') : '[Workbook has no sheets]' };
+            } catch (e) {
+                return { error: 'Spreadsheet error: ' + e.message };
+            }
+        }
+
+        /* ---------------- PowerPoint ---------------- */
+
+        async extractPptx(file) {
+            try {
+                const zip = await this.loadZip(file);
+                const num = (n) => parseInt((n.match(/(\d+)\.xml$/) || [])[1] || '0', 10);
+                const slideNames = Object.keys(zip.files)
+                    .filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+                    .sort((a, b) => num(a) - num(b));
+
+                if (!slideNames.length) return { content: '[Presentation has no slides]' };
+
+                const parts = [];
+                for (let i = 0; i < slideNames.length; i++) {
+                    const n = slideNames[i];
+                    const text = this.xmlParagraphs(await zip.file(n).async('string'), 'a:p', 'a:t');
+                    let block = `--- Slide ${i + 1} ---\n${text || '[no text]'}`;
+
+                    const notes = zip.file(`ppt/notesSlides/notesSlide${num(n)}.xml`);
+                    if (notes) {
+                        const nt = this.xmlParagraphs(await notes.async('string'), 'a:p', 'a:t').trim();
+                        if (nt) block += `\n[Notes]\n${nt}`;
+                    }
+                    parts.push(block);
+                }
+                return { content: parts.join('\n\n') };
+            } catch (e) {
+                return { error: 'PowerPoint error: ' + e.message };
+            }
+        }
+
+        /* ---------------- OpenDocument (.odt, .odp) ---------------- */
+
+        async extractOdf(file) {
+            try {
+                const zip = await this.loadZip(file);
+                const f = zip.file('content.xml');
+                if (!f) return { error: 'OpenDocument error: content.xml not found.' };
+                const doc = new DOMParser().parseFromString(await f.async('string'), 'application/xml');
+
+                const lines = [];
+                const walk = (node) => {
+                    for (const child of node.childNodes) {
+                        if (child.nodeType !== 1) continue;
+                        const tag = child.nodeName;
+                        if (tag === 'text:p' || tag === 'text:h') {
+                            const t = child.textContent;
+                            if (t.trim()) lines.push(t);
+                        } else {
+                            walk(child);
+                        }
+                    }
+                };
+                walk(doc.documentElement);
+                return { content: lines.length ? lines.join('\n') : '[Document is empty]' };
+            } catch (e) {
+                return { error: 'OpenDocument error: ' + e.message };
+            }
+        }
+
+        /* ---------------- EPUB ---------------- */
+
+        async extractEpub(file) {
+            try {
+                const zip = await this.loadZip(file);
+                const names = Object.keys(zip.files)
+                    .filter(n => /\.(xhtml|html|htm)$/i.test(n) && !zip.files[n].dir)
+                    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+                if (!names.length) return { content: '[EPUB has no readable chapters]' };
+
+                const parts = [];
+                for (const n of names) {
+                    const html = await zip.file(n).async('string');
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    doc.querySelectorAll('script, style').forEach(el => el.remove());
+                    const text = (doc.body ? doc.body.innerText || doc.body.textContent : '').trim();
+                    if (text) parts.push(`--- ${n} ---\n${text.replace(/\n{3,}/g, '\n\n')}`);
+                }
+                return { content: parts.join('\n\n') || '[EPUB is empty]' };
+            } catch (e) {
+                return { error: 'EPUB error: ' + e.message };
+            }
+        }
+
+        /* ---------------- RTF ---------------- */
+
+        async extractRtf(file) {
+            try {
+                const raw = await this.extractText(file);
+                return { content: this.rtfToText(raw) || '[Document is empty]' };
+            } catch (e) {
+                return { error: 'RTF error: ' + e.message };
+            }
+        }
+
+        rtfToText(text) {
+            const SKIP = new Set(['fonttbl','colortbl','stylesheet','info','pict','header','footer',
+                'themedata','datastore','colorschememapping','latentstyles','listtable',
+                'listoverridetable','rsidtbl','generator','filetbl','revtbl']);
+            let out = '', depth = 0, skipDepth = null, i = 0;
+
+            while (i < text.length) {
+                const c = text[i];
+
+                if (c === '{') {
+                    depth++;
+                    if (skipDepth === null) {
+                        const m = /^\{(\\\*)?(?:\\([a-zA-Z]+))?/.exec(text.substr(i, 40));
+                        if (m && (m[1] || (m[2] && SKIP.has(m[2])))) skipDepth = depth;
+                    }
+                    i++; continue;
+                }
+                if (c === '}') {
+                    if (skipDepth !== null && depth === skipDepth) skipDepth = null;
+                    depth--; i++; continue;
+                }
+
+                const skipping = skipDepth !== null;
+
+                if (c === '\\') {
+                    const n = text[i + 1];
+                    if (n === '\\' || n === '{' || n === '}') {
+                        if (!skipping) out += n;
+                        i += 2; continue;
+                    }
+                    if (n === "'") {
+                        if (!skipping) out += String.fromCharCode(parseInt(text.substr(i + 2, 2), 16) || 63);
+                        i += 4; continue;
+                    }
+                    const m = /^\\([a-zA-Z]+)(-?\d+)? ?/.exec(text.substr(i, 32));
+                    if (m) {
+                        const word = m[1];
+                        i += m[0].length;
+                        if (!skipping) {
+                            if (word === 'par' || word === 'line' || word === 'row') out += '\n';
+                            else if (word === 'tab' || word === 'cell') out += '\t';
+                            else if (word === 'u' && m[2] !== undefined) {
+                                let code = parseInt(m[2], 10);
+                                if (code < 0) code += 65536;
+                                out += String.fromCharCode(code);
+                                i++; // skip the fallback character
+                            }
+                        } else if (word === 'u') {
+                            i++;
+                        }
+                        continue;
+                    }
+                    i += 2; continue;
+                }
+
+                if (c === '\n' || c === '\r') { i++; continue; }
+                if (!skipping) out += c;
+                i++;
+            }
+            return out.replace(/\n{3,}/g, '\n\n').trim();
+        }
+
+        /* ---------------- Legacy .doc / .ppt (best effort) ---------------- */
+
+        async extractLegacy(file) {
+            try {
+                const bytes = new Uint8Array(await file.arrayBuffer());
+                const MIN = 8;
+                const isPrint = (b) => (b >= 32 && b < 127) || b === 9 || b === 10 || b === 13;
+                const runs = [];
+
+                // 8-bit text runs
+                let cur = '';
+                for (let i = 0; i < bytes.length; i++) {
+                    const b = bytes[i];
+                    if (isPrint(b)) cur += String.fromCharCode(b);
+                    else { if (cur.length >= MIN) runs.push(cur); cur = ''; }
+                }
+                if (cur.length >= MIN) runs.push(cur);
+
+                // 16-bit (UTF-16LE) text runs
+                let i = 0;
+                while (i < bytes.length - 1) {
+                    let s = '', j = i;
+                    while (j < bytes.length - 1 && bytes[j + 1] === 0 && isPrint(bytes[j])) {
+                        s += String.fromCharCode(bytes[j]);
+                        j += 2;
+                    }
+                    if (s.length >= MIN) { runs.push(s); i = j; } else { i++; }
+                }
+
+                const good = runs
+                    .map(r => r.trim())
+                    .filter(r => {
+                        const letters = (r.match(/[A-Za-z]/g) || []).length;
+                        return r.length >= MIN && letters / r.length > 0.5;
+                    });
+
+                if (!good.length) return { content: '[No readable text found in legacy file]' };
+                return {
+                    content: '[Best-effort extraction from legacy binary format — may be incomplete or noisy. ' +
+                             'Save as .docx/.pptx for accurate results.]\n\n' + good.join('\n')
+                };
+            } catch (e) {
+                return { error: 'Legacy file error: ' + e.message };
+            }
+        }
+
+        /* ---------------- OCR (images) ---------------- */
+
+        async getOcr() {
+            if (this.ocrWorker) return this.ocrWorker;
+            if (typeof Tesseract === 'undefined') return null;
+            this.setProgress(`Loading OCR engine (${this.ocrLang})… first run downloads language data`);
+            try {
+                this.ocrWorker = await Tesseract.createWorker(this.ocrLang);
+            } catch (e) {
+                this.ocrWorker = null;
+                throw new Error('OCR engine failed to start: ' + e.message);
+            }
+            return this.ocrWorker;
+        }
+
+        async disposeOcr() {
+            if (this.ocrWorker) {
+                try { await this.ocrWorker.terminate(); } catch (e) {}
+                this.ocrWorker = null;
+            }
+        }
+
+        async extractImage(blob) {
+            const worker = await this.getOcr();
+            if (!worker) return { error: 'OCR engine failed to load (check your connection).' };
+            const { data } = await worker.recognize(blob);
+            const text = (data.text || '').trim();
+            return { content: text || '[No text detected in image]' };
+        }
+
+        /* ---------------- Output ---------------- */
 
         renderOutput(out) {
             const filesData = out.results;
